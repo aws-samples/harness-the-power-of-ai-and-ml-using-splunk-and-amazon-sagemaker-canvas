@@ -1,0 +1,287 @@
+---
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: 'CloudFormation stack to export data in Splunk index to AWS Glue and Amazon Athena.'
+
+Parameters:
+  splunkSecretsManagerSecret:
+    Type: String
+    Description: 'AWS Secrets Manager secret storing Splunk deployment details.'
+    Default: 'SplunkDeployment'
+  splunkDataExportConfigurationFile:
+    Type: String
+    Description: 'Configuration JSON file used by Splunk data export.'
+    Default: 'configuration.json'
+  splunkDataExportTopLevelPath:
+    Type: String
+    Description: 'Top level path for exported Splunk data in S3 bucket.'
+    Default: 'splunk-data'
+
+Resources:
+  splunkDataExportLambdaFunctionExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: 'Allow'
+            Principal:
+              Service:
+                - 'lambda.amazonaws.com'
+            Action:
+              - 'sts:AssumeRole'
+      Path: '/'
+      Policies:
+        - PolicyName: !Sub '${AWS::StackName}-splunkDataExportLambdaFunctionExecutionRolePolicy'
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: 'Allow'
+                Action:
+                  - 's3:PutObject'
+                  - 's3:GetObject'
+                  - 's3:ListBucket'
+                  - 's3:DeleteObject'
+                Resource:
+                  - !Sub '${splunkDataExportS3Bucket.Arn}/${splunkDataExportTopLevelPath}/*'
+                  - !Sub '${splunkDataExportS3Bucket.Arn}'
+              - Effect: 'Allow'
+                Action:
+                  - 'secretsmanager:GetSecretValue'
+                Resource:
+                  - !Sub 'arn:${AWS::Partition}:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:${splunkSecretsManagerSecret}-*'
+              - Effect: 'Allow'
+                Action:
+                  - 'logs:CreateLogGroup'
+                Resource: !Sub 'arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:*'
+              - Effect: 'Allow'
+                Action:
+                  - 'logs:CreateLogStream'
+                  - 'logs:PutLogEvents'
+                Resource: !Sub 'arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${AWS::StackName}-splunkDataExport:*'
+  splunkDataExportLambdaFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/${AWS::StackName}-splunkDataExport'
+      RetentionInDays: 7
+  splunkDataExportLambdaFunction:
+    Type: AWS::Serverless::Function
+    DependsOn: splunkDataExportLambdaFunctionLogGroup
+    Properties:
+      PackageType: Image
+      ImageConfig:
+        Command: ['app.lambda_handler']
+      FunctionName: !Sub '${AWS::StackName}-splunkDataExport'
+      Description: 'Lambda function for performing a data export to S3 bucket.'
+      Architectures:
+        - arm64
+      CodeUri: './splunk-data-export/'
+      MemorySize: 8192
+      Timeout: 500
+      ReservedConcurrentExecutions: 1
+      Role: !GetAtt splunkDataExportLambdaFunctionExecutionRole.Arn
+      Environment:
+        Variables:
+          AWS_SECRETS_MANAGER_SPLUNK_SECRET_NAME: !Ref splunkSecretsManagerSecret
+          AMAZON_S3_DATA_EXPORT_BUCKET_NAME: !Ref splunkDataExportS3Bucket
+          AMAZON_S3_DATA_EXPORT_TOP_LEVEL_PATH: !Ref splunkDataExportTopLevelPath
+          DATA_EXPORT_CONFIGURATION_FILE: !Ref splunkDataExportConfigurationFile
+    Metadata:
+      Dockerfile: './splunk-data-export/Dockerfile'
+      DockerContext: .
+      DockerTag: v1
+  splunkDataExportS3BucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket:
+        !Ref splunkDataExportS3Bucket
+      PolicyDocument:
+        Statement:
+          - Action: 's3:*'
+            Effect: Deny
+            Resource:
+              - !Sub arn:aws:s3:::${splunkDataExportS3Bucket}
+              - !Sub arn:aws:s3:::${splunkDataExportS3Bucket}/*
+            Condition:
+              Bool:
+                aws:SecureTransport: false
+            Principal: '*'
+  splunkDataExportS3Bucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+  splunkDataExportGlueDatabase:
+    Type: AWS::Glue::Database
+    Properties:
+      CatalogId:
+        !Sub '${AWS::AccountId}'
+      DatabaseInput:
+        Name:
+          !Sub 'splunk-data-export'
+        Description:
+          !Sub 'Glue database for Splunk index data export - ${AWS::StackName}'
+  splunkDataExportGlueCrawlerRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - glue.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSGlueServiceRole
+      Policies:
+        - PolicyName:
+            !Sub '${AWS::StackName}-splunkDataExportGlueCrawlerRolePolicy'
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:PutObject
+                  - s3:GetObject
+                Resource:
+                  - !Sub '${splunkDataExportS3Bucket.Arn}/${splunkDataExportTopLevelPath}/*'
+  splunkDataExportGlueCrawler:
+    Type: AWS::Glue::Crawler
+    Properties:
+      DatabaseName:
+        !Ref splunkDataExportGlueDatabase
+      Description:
+        !Sub 'Glue crawler for Splunk index data export - ${AWS::StackName}'
+      Name: 'splunk-data-export-glue-crawler'
+      Role:
+        !GetAtt splunkDataExportGlueCrawlerRole.Arn
+      Targets:
+        S3Targets:
+          - Path:
+              !Sub '${splunkDataExportS3Bucket}/${splunkDataExportTopLevelPath}/'
+      Configuration: |
+        {
+          "Version": 1.0,
+          "Grouping": {"TableLevelConfiguration": 3}
+        }
+      SchemaChangePolicy:
+        UpdateBehavior: UPDATE_IN_DATABASE
+        DeleteBehavior: LOG
+  splunkDataExportStepFunctionsLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/stepfunctions/${AWS::StackName}-splunkDataExport'
+      RetentionInDays: 7
+  splunkDataExportStateMachine:
+    Type: AWS::Serverless::StateMachine
+    Properties:
+      Logging:
+        Level: ERROR
+        Destinations:
+          - CloudWatchLogsLogGroup:
+              LogGroupArn: !GetAtt splunkDataExportStepFunctionsLogGroup.Arn
+      Tracing:
+        Enabled: True
+      Policies:
+        - Statement:
+            - Effect: 'Allow'
+              Action:
+                - 'logs:CreateLogDelivery'
+                - 'logs:CreateLogStream'
+                - 'logs:GetLogDelivery'
+                - 'logs:UpdateLogDelivery'
+                - 'logs:DeleteLogDelivery'
+                - 'logs:ListLogDeliveries'
+                - 'logs:PutLogEvents'
+                - 'logs:PutResourcePolicy'
+                - 'logs:DescribeResourcePolicies'
+                - 'logs:DescribeLogGroups'
+              Resource: '*'
+            - Effect: 'Allow'
+              Action:
+                - 'lambda:InvokeFunction'
+              Resource:
+                - !GetAtt splunkDataExportLambdaFunction.Arn
+            - Effect: 'Allow'
+              Action:
+                - 'glue:StartCrawler'
+                - 'glue:GetCrawler'
+              Resource:
+                - !Sub 'arn:${AWS::Partition}:glue:${AWS::Region}:${AWS::AccountId}:crawler/${splunkDataExportGlueCrawler}'
+      Definition:
+        StartAt: 'ExportSplunkIndexData'
+        States:
+          ExportSplunkIndexData:
+            Type: 'Task'
+            Resource: !GetAtt splunkDataExportLambdaFunction.Arn
+            Next: 'StartCrawlSplunkIndexData'
+            Retry:
+              - IntervalSeconds: 60
+                BackoffRate: 2
+                MaxAttempts: 3
+                ErrorEquals:
+                  - States.ALL
+          StartCrawlSplunkIndexData:
+            Type: 'Task'
+            Resource: 'arn:aws:states:::aws-sdk:glue:startCrawler'
+            Next: 'WaitCrawlSplunkIndexData'
+            Parameters:
+              Name: !Ref splunkDataExportGlueCrawler
+            Retry:
+              - IntervalSeconds: 60
+                BackoffRate: 2
+                MaxAttempts: 3
+                ErrorEquals:
+                  - States.ALL
+          WaitCrawlSplunkIndexData:
+            Type: 'Wait'
+            Seconds: 10
+            Next: 'CheckCrawlSplunkIndexData'
+          CheckCrawlSplunkIndexData:
+            Type: 'Task'
+            Resource: 'arn:aws:states:::aws-sdk:glue:getCrawler'
+            Next: 'DecideStateCrawlSplunkIndexData'
+            Parameters:
+              Name: !Ref splunkDataExportGlueCrawler
+            Retry:
+              - IntervalSeconds: 60
+                BackoffRate: 2
+                MaxAttempts: 3
+                ErrorEquals:
+                  - States.ALL
+          DecideStateCrawlSplunkIndexData:
+            Type: 'Choice'
+            Choices:
+              - Variable: '$.Crawler.State'
+                StringEquals: 'READY'
+                Next: 'CompleteCrawlSplunkIndexData'
+              - Variable: '$.Crawler.State'
+                StringEquals: 'RUNNING'
+                Next: 'WaitCrawlSplunkIndexData'
+              - Variable: '$.Crawler.State'
+                StringEquals: 'STOPPING'
+                Next: 'WaitCrawlSplunkIndexData'
+          CompleteCrawlSplunkIndexData:
+            Type: 'Succeed'
+  splunkDataExportAthenaWorkGroup:
+    Type: AWS::Athena::WorkGroup
+    Properties:
+      Description: !Sub 'Athena work group - ${AWS::StackName}'
+      Name: splunk-data-export-athena-workgroup
+      State: ENABLED
+      RecursiveDeleteOption: true
+      WorkGroupConfiguration:
+        ResultConfiguration:
+          EncryptionConfiguration:
+            EncryptionOption: 'SSE_S3'
+          OutputLocation:
+            !Sub 's3://${splunkDataExportS3Bucket}/athena-queries/'
+
+Outputs:
+  splunkDataExportS3BucketName:
+    Description: 'Name of S3 bucket used for storing files.'
+    Value: !Ref splunkDataExportS3Bucket

@@ -1,0 +1,25 @@
+{
+  "searches":
+  [
+    {
+      "spl": {
+        "search_query": "search source=mysource index=myindex sourcetype=mysourcetype | table *",
+        "search_export": {
+          "earliest_time": "0",
+          "latest_time": "now",
+          "enable_lookups": "true",
+          "parse_only": "false",
+          "count": "50000",
+          "output_mode": "json"
+        }
+      },
+      "s3": {
+        "path": "mypath/",
+        "partition_cols": ["myid"],
+        "partition_cols_duplicate": ["myid_copy"],
+        "engine": "pyarrow",
+        "compression": "snappy"
+      }
+    }
+  ]
+}

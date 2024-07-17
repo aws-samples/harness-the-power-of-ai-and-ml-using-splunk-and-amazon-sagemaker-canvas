@@ -1,0 +1,6 @@
+.aws-sam
+.aws-sam/
+.venv
+venv
+samconfig.toml
+.idea

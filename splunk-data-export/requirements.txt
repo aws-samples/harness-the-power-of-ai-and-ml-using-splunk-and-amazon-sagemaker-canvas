@@ -1,0 +1,7 @@
+boto3
+botocore
+splunk-sdk
+pytz
+pandas
+s3fs
+pyarrow
