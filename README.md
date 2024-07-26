@@ -29,7 +29,11 @@ For this walkthrough, you will need the following prerequisites in place:
 
 #### Storing the Splunk bearer token in AWS Secrets Manager ####
 
-[AWS Secrets Manager](https://aws.amazon.com/secrets-manager/) is used to store the Splunk bearer token. This is used by the AWS Lambda function when accessing Splunk's search REST API endpoint. Follow Splunk's [Create authentication tokens](https://docs.splunk.com/Documentation/Splunk/latest/Security/CreateAuthTokens) document for steps to create the bearer authentication token. Once you have the token generated, follow the steps below to store it using Secrets Manager:
+[AWS Secrets Manager](https://aws.amazon.com/secrets-manager/) is used to store the Splunk bearer token. This is used by the AWS Lambda function when accessing Splunk's search REST API endpoint. Follow Splunk's [Create authentication tokens](https://docs.splunk.com/Documentation/Splunk/latest/Security/CreateAuthTokens) document for steps to create the bearer authentication token.
+
+>> **Important**: If your Splunk instance has [IP allow lists](https://docs.splunk.com/Documentation/SplunkCloud/latest/Admin/ConfigureIPAllowList) implemented, confirm that IP restrictions are in place to allow you to access the Search REST API endpoint programmatically.
+
+Once you have the token generated, follow the steps below to store it using Secrets Manager:
 
 1. In the **AWS console**, navigate to **AWS Secrets Manager** and select **Store a new secret** to create a new secret.
 
