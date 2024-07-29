@@ -1,4 +1,4 @@
-# harness-the-power-of-ai-and-ml-using-splunk-and-amazon-sagemaker-canvas
+# Harness the power of artificial intelligence (AI) and machine learning (ML) using Splunk and Amazon SageMaker Canvas
 
 
 ## Overview ##
@@ -9,7 +9,9 @@ TODO: Replace with blog post link.
 
 ### Introduction ###
 
-The blog post above explores how Amazon SageMaker Canvas, a no-code ML development service, can be used in conjunction with data collected in Splunk to drive actionable insights. The adaptable approach detailed in it starts with an automated data engineering pipeline to make data stored in Splunk available to a wide range of personas, including business intelligence (BI) analysts, data scientists and ML practitioners, through a structured query language (SQL) interface. This is achieved by using the pipeline to transfer data from a Splunk index into an Amazon S3 bucket where it will be catalogued. 
+The blog post above explores how [Amazon SageMaker Canvas](https://aws.amazon.com/sagemaker/canvas/), a no-code ML development service, can be used in conjunction with data collected in [Splunk](https://www.splunk.com/) to drive actionable insights. 
+
+The adaptable approach detailed in it starts with an automated data engineering pipeline to make data stored in Splunk available to a wide range of personas, including business intelligence (BI) analysts, data scientists and ML practitioners, through a [structured query language (SQL)](https://en.wikipedia.org/wiki/SQL) interface. This is achieved by using the pipeline to transfer data from a [Splunk index](https://docs.splunk.com/Splexicon:Index) into an [Amazon S3](https://aws.amazon.com/s3/) bucket where it will be cataloged. 
 
 This `aws-samples` repository houses an [AWS Serverless Application Model (AWS SAM)](https://aws.amazon.com/serverless/sam/) template and related Python code that demonstrates this pipeline in action.
 
@@ -29,9 +31,9 @@ For this walkthrough, you will need the following prerequisites in place:
 
 #### Storing the Splunk bearer token in AWS Secrets Manager ####
 
-[AWS Secrets Manager](https://aws.amazon.com/secrets-manager/) is used to store the Splunk bearer token. This is used by the AWS Lambda function when accessing Splunk's search REST API endpoint. Follow Splunk's [Create authentication tokens](https://docs.splunk.com/Documentation/Splunk/latest/Security/CreateAuthTokens) document for steps to create the bearer authentication token.
+This solution uses [AWS Secrets Manager](https://aws.amazon.com/secrets-manager/) to store the Splunk bearer authentication token. The bearer authentication is used by the AWS Lambda function when accessing Splunk's [Search REST API](https://docs.splunk.com/Documentation/Splunk/latest/RESTTUT/RESTsearches) endpoint. Follow Splunk's [Create authentication tokens](https://docs.splunk.com/Documentation/Splunk/latest/Security/CreateAuthTokens) document for steps to create the bearer authentication token.
 
->> **Important**: If your Splunk instance has [IP allow lists](https://docs.splunk.com/Documentation/SplunkCloud/latest/Admin/ConfigureIPAllowList) implemented, confirm that IP restrictions are in place to allow you to access the Search REST API endpoint programmatically.
+> **Important**: If your Splunk instance has [IP allow lists](https://docs.splunk.com/Documentation/SplunkCloud/latest/Admin/ConfigureIPAllowList) configured, confirm that IP restrictions are in place that allow you to access the Splunk Search REST API endpoint programmatically.
 
 Once you have the token generated, follow the steps below to store it using Secrets Manager:
 
@@ -39,27 +41,27 @@ Once you have the token generated, follow the steps below to store it using Secr
 
 2. Select **Other type of secret** and enter the following details as **key**/**value** pairs. 
 
-| Key | Value                                                                                                                    |
-| --- |--------------------------------------------------------------------------------------------------------------------------|
-| `SplunkBearerToken` | Splunk bearer token retrieved from Splunk. This is used when authenticating against the Splunk search REST API endpoint. |
-| `SplunkDeploymentName` | Name of your Splunk deployment. This is used when constructing the search REST API endpoint URL for Splunk Cloud.        |
-| `SplunkIndexName` | Name of the Splunk index used to verify connectivity.                                                                    |
+| Key | Value                                                                                                                                                                                                                |
+| --- |----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `SplunkBearerToken` | Splunk bearer token retrieved from Splunk. This is used when authenticating against the Splunk search REST API endpoint.                                                                                             |
+| `SplunkDeploymentName` | Name of your Splunk deployment. This is used when constructing the search REST API endpoint URL for Splunk Cloud. For example, if your Splunk Cloud deployment is `test.splunkcloud.com`, this value will be `test`. |
+| `SplunkIndexName` | Name of the Splunk index used to verify connectivity.                                                                                                                                                                |
 
 3. Enter `SplunkDeployment` as the **Secret name**. Select **Next**. Complete the remaining configuration of the new secret with default settings.
 
 #### Review the configuration file ####
 
-The data that is exported from Splunk to S3 is controlled by the `configuration.json` [file](splunk-data-export/configuration.json). This file includes the Splunk [search processing language](https://docs.splunk.com/Documentation/Splunk/latest/SearchTutorial/Usethesearchlanguage) query used to retrieve the results.
+The data that is exported from Splunk to the S3 bucket is controlled by the `configuration.json` [file](splunk-data-export/configuration.json). This file includes the Splunk [Search Processing Language (SPL)](https://docs.splunk.com/Documentation/Splunk/latest/SearchTutorial/Usethesearchlanguage) query used to retrieve the results.
 
 > **Important**: The file currently contains default values. Update the file as required before deployment.
 
 ##### Update the configuration file #####
 
-`mysource`, `myindex` and `mysourcetype` values should be replaced as required by your SPL query. We recommend that you test the SPL query in Splunk with limited data first to ensure that it is returning expected results.
+1. Replace `mysource`, `myindex` and `mysourcetype` values as required by your SPL query. We recommend that you test the SPL query in Splunk with limited data first to ensure that it is returning expected results.
 
-`mypath` should be replaced with the name of the sub-folder in which the exported data is stored. The S3 bucket is auto-generated by the AWS SAM template deployment, and the top-level folder is determined later via the `splunkDataExportTopLevelPath` CloudFormation parameter during deployment time.
+2. Replace `mypath` with the name of the sub-folder in which the exported data is stored. The S3 bucket name itself is auto-generated by the AWS SAM template deployment, and the top-level folder is determined via the `splunkDataExportTopLevelPath` CloudFormation parameter during deployment time.
 
-`myid` should be replaced with the field that you wish to use as the partition key (for example, `userid`). Some analytics tooling expect data stored in the field used for constructing the partitioned folder structure to also be duplicated in a non-partitioned column. `myidcopy` should be replaced with the name of a new column that you create which duplicates this data (e.g. `userid_copy`).
+3. Replace `myid` with the field that you wish to use as the partition key (for example, `userid`). Some analytics tooling expect data stored in the field used for constructing the partitioned folder structure to also be duplicated in a non-partitioned column. Replace `myidcopy` with the name of a new column which duplicates this data (e.g. `userid_copy`).
 
 ```
 {
@@ -91,7 +93,7 @@ The data that is exported from Splunk to S3 is controlled by the `configuration.
 
 Visit the [Splunk Developer Tools site](https://dev.splunk.com/enterprise/docs/devtools/python/sdk-python/examplespython/) for more information about the Splunk Enterprise SDK for Python.
 
-### Deploying the solution ###
+### Deploy the solution ###
 
 Before starting, confirm that the latest version of the AWS SAM CLI is installed by running `sam --version`.
 
@@ -145,7 +147,7 @@ Parameter splunkDataExportTopLevelPath [splunk-data]:
 
 8. You are now ready to test the solution.
 
-### Testing the solution ###
+### Test the solution ###
 
 The data export pipeline has been fully provisioned through the deployed CloudFormation stack. To run it, navigate to the **Amazon Step Functions** console. Select the state machine, and select **Start execution**. After a few minutes, the entire pipeline will run. This will create and populate tables in AWS Glue.
 
@@ -161,7 +163,7 @@ Progress can be monitored using the **Graph view** of the state machine executio
 
 ![Step Functions state machine execution complete](images/step_functions_start_execution_2.png)
 
-Once complete, data can now be queried using Amazon Athena directly, or with other tools that integrate with Athena, such as Amazon SageMaker and Amazon QuickSight.
+Once complete, data can now be queried using [Amazon Athena](https://aws.amazon.com/athena/) directly, or with other tools that integrate with Athena, such as [Amazon SageMaker](https://aws.amazon.com/sagemaker/) and [Amazon QuickSight](https://aws.amazon.com/quicksight/).
 
 ![Querying data using Amazon Athena](images/amazon_athena_query_data_1.png)
 
@@ -170,7 +172,7 @@ Once complete, data can now be queried using Amazon Athena directly, or with oth
 If you want additional data to be crawled alongside the data exported from Splunk, create another folder inside the top-level folder, and upload your file to it (e.g. a CSV file). This data will be automatically crawled during the next execution of the Step Functions state machine and will appear as an additional table in the AWS Glue Data Catalog.
 
 - Top-level folder (e.g. `splunk-data/`) - set in `splunkDataExportTopLevelPath` CloudFormation parameter
-  - Data export path(s) (e.g. `mypath/`) - set in `configuration.json`
+  - Splunk data export path(s) (e.g. `mypath/`) - set in `configuration.json`
   - Additional data files (e.g. `myadditionalpath/`) - manually created (if required)
 
 ### Cleaning up ###
@@ -181,4 +183,4 @@ To avoid incurring future charges, delete the CloudFormation stacks that have be
 sam delete
 ```
 
-You will be required to empty the S3 bucket before the template can be deleted. The S3 bucket used for the data can be found in the CloudFormation output `splunkDataExportS3BucketName`.
+Empty the S3 bucket used for storing files before the template is deleted. The S3 bucket used for the data can be found in the CloudFormation output `splunkDataExportS3BucketName`.
