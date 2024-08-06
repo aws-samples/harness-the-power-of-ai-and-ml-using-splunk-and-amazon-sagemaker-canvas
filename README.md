@@ -1,6 +1,5 @@
 # Harness the power of artificial intelligence (AI) and machine learning (ML) using Splunk and Amazon SageMaker Canvas
 
-
 ## Overview ##
 
 ### AWS Blog post ###
@@ -31,7 +30,7 @@ For this walkthrough, you will need the following prerequisites in place:
 
 #### Storing the Splunk bearer token in AWS Secrets Manager ####
 
-This solution uses [AWS Secrets Manager](https://aws.amazon.com/secrets-manager/) to store the Splunk bearer authentication token. The bearer authentication is used by the AWS Lambda function when accessing Splunk's [Search REST API](https://docs.splunk.com/Documentation/Splunk/latest/RESTTUT/RESTsearches) endpoint. Follow Splunk's [Create authentication tokens](https://docs.splunk.com/Documentation/Splunk/latest/Security/CreateAuthTokens) document for steps to create the bearer authentication token.
+This solution uses [AWS Secrets Manager](https://aws.amazon.com/secrets-manager/) to store the Splunk bearer authentication token. The bearer authentication token is retrieved and used by the AWS Lambda function when accessing Splunk's [Search REST API](https://docs.splunk.com/Documentation/Splunk/latest/RESTTUT/RESTsearches) endpoint. Follow Splunk's [Create authentication tokens](https://docs.splunk.com/Documentation/Splunk/latest/Security/CreateAuthTokens) document for steps to create the bearer authentication token.
 
 > **Important**: If your Splunk instance has [IP allow lists](https://docs.splunk.com/Documentation/SplunkCloud/latest/Admin/ConfigureIPAllowList) configured, confirm that IP restrictions are in place that allow you to access the Splunk Search REST API endpoint programmatically.
 
