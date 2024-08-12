@@ -4,7 +4,7 @@
 
 ### AWS Blog post ###
 
-TODO: Replace with blog post link.
+https://aws.amazon.com/blogs/machine-learning/harness-the-power-of-ai-and-ml-using-splunk-and-amazon-sagemaker-canvas/
 
 ### Introduction ###
 
